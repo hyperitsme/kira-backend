@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: kiraai-backend
+    env: docker
+    plan: starter
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 8080
+      - key: BASE_PATH
+        value: /dashboard
+      - key: CORS_ORIGIN
+        value: https://kiraai.io
+      - key: DATABASE_URL
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: BINANCE_WS
+        value: wss://stream.binance.com:9443/stream
+      - key: BINANCE_HTTP
+        value: https://api.binance.com
+      - key: DEXSCREENER_HTTP
+        value: https://api.dexscreener.com/latest
+      - key: BASE_RPC_URL
+        sync: false
+      - key: X402_WALLET_PRIVATE_KEY
+        sync: false
+      - key: USDC_ADDRESS_BASE
+        value: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+      - key: X402_PROVIDER_URL
+        sync: false
