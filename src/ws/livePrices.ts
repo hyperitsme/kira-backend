@@ -10,7 +10,7 @@ export function startLivePricesWS(server: Server) {
   const BASE = process.env.BASE_PATH || '';
   const wss = new WebSocketServer({ server, path: `${BASE}/ws/prices` });
 
-  // helper broadcast
+  // broadcast helper
   const broadcast = (payload: Tick) => {
     const msg = JSON.stringify(payload);
     wss.clients.forEach((c) => c.readyState === WebSocket.OPEN && c.send(msg));
@@ -22,30 +22,32 @@ export function startLivePricesWS(server: Server) {
   const url = `${wsBase}/stream?streams=${streams}`;
 
   let ws: WebSocket | null = null;
-  let pollingTimer: NodeJS.Timer | null = null;
+  // ✅ perbaikan tipe timer
+  let pollingTimer: ReturnType<typeof setInterval> | null = null;
 
   const startPollingFallback = () => {
-    if (pollingTimer) return;
+    if (pollingTimer) return; // sudah jalan
     const httpBase = process.env.BINANCE_HTTP || 'https://api.binance.com';
     console.warn('[KiraAI] Falling back to HTTP polling ticker…');
+
     pollingTimer = setInterval(async () => {
       try {
-        // ambil semua symbol secara paralel
+        // ambil semua symbol paralel
         const reqs = DEFAULT_SYMBOLS.map(sym =>
           axios.get(`${httpBase}/api/v3/ticker/price`, { params: { symbol: sym }, timeout: 4000 })
             .then(({ data }) => ({ symbol: sym, price: Number(data.price), source: 'binance-http' }))
             .catch(async () => {
-              // fallback kedua: Coinbase spot (BTC/ETH/SOL/BNB → USD jika ada)
+              // fallback kedua: Coinbase spot (USD)
               const base = sym.replace(/USDT$/,'').toUpperCase();
               const quote = 'USD';
               const { data } = await axios.get(`https://api.coinbase.com/v2/prices/${base}-${quote}/spot`, { timeout: 4000 });
               return { symbol: `${base}${quote}`, price: Number(data?.data?.amount), source: 'coinbase-http' };
             })
         );
+
         const ticks: Tick[] = await Promise.all(reqs);
         for (const t of ticks) {
           broadcast(t);
-          // simpan ke DB
           await query('insert into price_ticks (symbol, price, source) values ($1,$2,$3)', [t.symbol, t.price, t.source]);
         }
       } catch (e) {
@@ -64,7 +66,6 @@ export function startLivePricesWS(server: Server) {
 
   ws.on('open', () => {
     console.log('[KiraAI] Binance WS connected:', url);
-    // jika sebelumnya polling berjalan, hentikan
     if (pollingTimer) { clearInterval(pollingTimer); pollingTimer = null; }
   });
 
@@ -83,8 +84,7 @@ export function startLivePricesWS(server: Server) {
 
   ws.on('error', (e: any) => {
     console.error('Binance WS error', e?.message || e);
-    // 451 = geofence → langsung fallback
-    startPollingFallback();
+    startPollingFallback(); // 451/others → fallback
   });
 
   ws.on('close', () => {
